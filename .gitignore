@@ -1,0 +1,15 @@
+# Local runtime secrets: never commit
+*.env
+!config.env.example
+.env*
+secrets/
+secrets.yaml
+
+# Your own allowlist (the example is tracked)
+actions.json
+actions.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/

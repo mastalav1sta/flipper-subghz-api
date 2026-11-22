@@ -1,0 +1,9 @@
+{
+  "actions": [
+    {"name": "Gate", "path": "/ext/subghz/Gate.sub", "protocol": "RAW", "repeat": 1},
+    {"name": "Garage_door", "path": "/ext/subghz/Garage_door.sub", "protocol": "RAW", "repeat": 1},
+    {"name": "Light_on", "path": "/ext/subghz/Light_on.sub", "protocol": "Princeton", "repeat": 10},
+    {"name": "Light_off", "path": "/ext/subghz/Light_off.sub", "protocol": "Princeton", "repeat": 10},
+    {"name": "Socket_1", "path": "/ext/subghz/Socket_1.sub", "protocol": "Princeton", "repeat": 10}
+  ]
+}

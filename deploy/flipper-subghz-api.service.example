@@ -1,0 +1,37 @@
+# Example systemd unit. Replace <user> and <install-dir>, then:
+#   sudo install -m 644 deploy/flipper-subghz-api.service.example \
+#       /etc/systemd/system/flipper-subghz-api.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now flipper-subghz-api
+[Unit]
+Description=Flipper Zero Sub-GHz send API (LAN only, token auth)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<user>
+Group=<user>
+SupplementaryGroups=dialout
+WorkingDirectory=<install-dir>
+# The token is read from the env file by the app itself (not EnvironmentFile=), so it
+# does not appear in the process environment. The env file may name the actions file
+# (FLIPPER_ACTIONS_FILE); --actions-file overrides it.
+ExecStart=/usr/bin/python3 -m flipper_subghz_api \
+    --env-file /home/<user>/.config/flipper-subghz-api/config.env
+# A crash restarts the HTTP server only; no request is ever re-sent.
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+DevicePolicy=closed
+DeviceAllow=char-ttyACM rw
+# Do NOT add ProtectProc=invisible or PrivatePIDs=: the "port already in use" check scans
+# /proc and would then see nobody else.
+
+[Install]
+WantedBy=multi-user.target

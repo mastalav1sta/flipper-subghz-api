@@ -1,0 +1,84 @@
+# flipper-subghz-api: a light with SEPARATE on and off codes (e.g. a 433 MHz Princeton
+# remote), as a Home Assistant package. See flipper_buttons_package.yaml for setup,
+# secrets and placeholders (192.0.2.10, port 8787).
+#
+# Why not `optimistic: true`? An optimistic template light flips its state even when the
+# API refuses the command (e.g. HTTP 429 from the 3 s rate limit), so HA shows "on" for a
+# light that is still off and you end up tapping twice. Instead:
+#   * the light's state is an input_boolean that is set ONLY after a confirmed HTTP 200;
+#   * a refused or failed send is retried ONCE after 3 s, then you get a notification;
+#   * `mode: restart`, so the latest tap wins.
+# The single retry is safe ONLY because on and off are different codes: sending "on" twice
+# cannot turn the light off. Never copy the retry to a toggle remote (gates, garage doors).
+# There is still no real feedback: if someone uses the physical remote, HA won't know.
+
+input_boolean:
+  flipper_light_state:
+    name: "Light (last confirmed)"
+    icon: mdi:lightbulb
+
+rest_command:
+  flipper_light_on:
+    url: "http://192.0.2.10:8787/api/send/Light_on"
+    method: post
+    headers:
+      Authorization: !secret flipper_subghz_api_auth
+    timeout: 40
+  flipper_light_off:
+    url: "http://192.0.2.10:8787/api/send/Light_off"
+    method: post
+    headers:
+      Authorization: !secret flipper_subghz_api_auth
+    timeout: 40
+
+script:
+  flipper_light_set:
+    alias: "Light - send on/off"
+    mode: restart
+    fields:
+      target:
+        description: "on or off"
+        example: "on"
+    sequence:
+      - condition: template
+        value_template: "{{ target in ['on', 'off'] }}"
+      - action: "rest_command.flipper_light_{{ target }}"
+        response_variable: tx
+        continue_on_error: true
+      - if: "{{ tx is not defined or tx.status != 200 }}"
+        then:
+          - delay: 3
+          - action: "rest_command.flipper_light_{{ target }}"
+            response_variable: tx2
+            continue_on_error: true
+          - if: "{{ tx2 is defined and tx2.status == 200 }}"
+            then:
+              - action: "input_boolean.turn_{{ target }}"
+                target:
+                  entity_id: input_boolean.flipper_light_state
+            else:
+              - action: persistent_notification.create
+                data:
+                  title: "Light {{ target }} not confirmed"
+                  message: >-
+                    HTTP {{ tx2.status if tx2 is defined else 'none' }}
+                    after one retry. Check the light.
+        else:
+          - action: "input_boolean.turn_{{ target }}"
+            target:
+              entity_id: input_boolean.flipper_light_state
+
+template:
+  - light:
+      - name: "Light"
+        unique_id: flipper_subghz_light
+        icon: mdi:lightbulb
+        state: "{{ is_state('input_boolean.flipper_light_state', 'on') }}"
+        turn_on:
+          - action: script.flipper_light_set
+            data:
+              target: "on"
+        turn_off:
+          - action: script.flipper_light_set
+            data:
+              target: "off"

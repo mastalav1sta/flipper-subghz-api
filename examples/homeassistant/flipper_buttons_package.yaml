@@ -1,0 +1,89 @@
+# flipper-subghz-api: momentary buttons for toggle-style remotes (gate, garage door).
+# Home Assistant package: put it in config/packages/ and enable packages in
+# configuration.yaml (homeassistant: packages: !include_dir_named packages).
+#
+# Replace 192.0.2.10 (documentation placeholder) with the IP of the host running the API,
+# and 8787 with your FLIPPER_API_PORT. Action names must match your actions file.
+#
+# secrets.yaml (never commit it):
+#   flipper_subghz_api_auth: "Bearer <token from config.env>"
+#
+# What this models honestly:
+#   * one press = one replay of the saved capture. The remote is toggle-only and the API
+#     has no feedback, so there is no open/closed state and no `cover` entity.
+#   * if the API does not answer 200, the script NOTIFIES and NEVER RETRIES: for a toggle
+#     remote a retry could undo a press that did go out (a 504 "unknown" may have sent).
+#   * the API refuses any send within FLIPPER_MIN_INTERVAL (default 3 s) of the previous
+#     one, across all actions (HTTP 429). That shows up as a notification, too.
+
+rest_command:
+  flipper_send_gate:
+    url: "http://192.0.2.10:8787/api/send/Gate"
+    method: post
+    headers:
+      Authorization: !secret flipper_subghz_api_auth
+    timeout: 40  # > FLIPPER_TX_TIMEOUT (30 s) so HA sees the API's real answer
+  flipper_send_garage_door:
+    url: "http://192.0.2.10:8787/api/send/Garage_door"
+    method: post
+    headers:
+      Authorization: !secret flipper_subghz_api_auth
+    timeout: 40
+
+script:
+  flipper_send_gate:
+    alias: "Gate - send toggle"
+    mode: single  # a second press while running is ignored, never queued
+    sequence:
+      - action: rest_command.flipper_send_gate
+        response_variable: tx
+        continue_on_error: true  # timeouts/HTTP errors may raise; we still notify below
+      - if: "{{ tx is not defined or tx.status != 200 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              title: "Gate toggle not confirmed"
+              message: >-
+                API answered HTTP {{ tx.status if tx is defined else "no response" }}
+                ({{ tx.content.reason | default("?") if tx is defined else "?" }}).
+                Not retried. Check the gate before pressing again.
+  flipper_send_garage_door:
+    alias: "Garage door - send toggle"
+    mode: single
+    sequence:
+      - action: rest_command.flipper_send_garage_door
+        response_variable: tx
+        continue_on_error: true
+      - if: "{{ tx is not defined or tx.status != 200 }}"
+        then:
+          - action: persistent_notification.create
+            data:
+              title: "Garage door toggle not confirmed"
+              message: >-
+                API answered HTTP {{ tx.status if tx is defined else "no response" }}
+                ({{ tx.content.reason | default("?") if tx is defined else "?" }}).
+                Not retried. Check the garage door before pressing again.
+
+template:
+  - button:
+      - name: "Gate toggle"
+        unique_id: flipper_subghz_gate_toggle
+        icon: mdi:gate
+        press:
+          - action: script.flipper_send_gate
+      - name: "Garage door toggle"
+        unique_id: flipper_subghz_garage_door_toggle
+        icon: mdi:garage
+        press:
+          - action: script.flipper_send_garage_door
+
+binary_sensor:
+  - platform: rest
+    name: "Flipper Sub-GHz API available"
+    unique_id: flipper_subghz_api_available
+    resource: "http://192.0.2.10:8787/health"
+    headers:
+      Authorization: !secret flipper_subghz_api_auth
+    device_class: connectivity
+    scan_interval: 60
+    value_template: "{{ value_json.device_present and value_json.device_rw }}"
