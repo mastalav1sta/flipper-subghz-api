@@ -1,5 +1,14 @@
 # flipper-subghz-api
 
+**A network satellite for your Flipper Zero.** Put the Flipper wherever the radio needs to
+reach (next to the gate, in the garage, across the house) on any small Linux box, and let
+Home Assistant send through it over your LAN.
+
+**Is your Flipper plugged into your Home Assistant machine?** Then use
+[flipper_rc](https://github.com/ClusterM/flipper_rc) instead. It's a full HACS integration
+with IR and Sub-GHz that creates a button for every `.sub` file automatically. This
+project is for when the Flipper sits somewhere else.
+
 Control any device that has a **fixed-code Sub-GHz remote** from Home Assistant, locally,
 using a Flipper Zero as the transmitter: gates, garage doors, lights, sockets, blinds,
 fans, and so on. You record the remote once with the Flipper, then this small HTTP API
